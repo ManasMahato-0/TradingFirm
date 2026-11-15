@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/
+logs/
+.pytest_cache/
+
+# editor / local
+.vscode/
+.idea/
+.DS_Store
+.claude/settings.local.json
