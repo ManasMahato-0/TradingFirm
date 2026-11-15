@@ -122,6 +122,18 @@ def render() -> None:
                 st.caption(starts)
     st.caption("Open **Money** in the sidebar for charts and details.")
 
+    # ---- the Head
+    from firm.agents.head import latest
+
+    st.subheader("What the Head says")
+    head = latest(LIVE_DIR / "firm.db")
+    if head:
+        st.caption(f"Report of {head[0]}. The Head only advises; it never moves money.")
+        for line in head[1].splitlines()[1:]:
+            st.markdown(line)
+    else:
+        st.caption("No report yet. The Head writes one each evening after the daily notes.")
+
     # ---- what is it doing right now
     st.subheader("What the system is doing right now")
     rows = _recent()

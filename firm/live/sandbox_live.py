@@ -29,14 +29,21 @@ START_DELAY = pd.Timedelta(seconds=45)
 FIELDS = ("open", "high", "low", "close", "volume")
 
 
-def probe_token(make_fyers: Callable[[], object]) -> tuple[bool, str]:
+def probe_token(make_fyers: Callable[[], object],
+                renew: Callable[[], tuple[bool, str]] | None = None) -> tuple[bool, str]:
     """True only if Fyers answers a simple authenticated call. Any failure means 'please log in';
-    an expired token can come back as a plain 'Bad request', not a clean auth error."""
+    an expired token can come back as a plain 'Bad request', not a clean auth error.
+    If `renew` is given, a failed probe tries it once and probes again."""
     try:
         status = make_fyers().nse_cash_status()
         return True, f"Fyers is reachable (NSE cash market: {status})"
     except Exception as e:
-        return False, f"{type(e).__name__}: {str(e)[:160]}"
+        failure = f"{type(e).__name__}: {str(e)[:160]}"
+    if renew is not None:
+        renewed, _ = renew()
+        if renewed:
+            return probe_token(make_fyers)
+    return False, failure
 
 
 class FyersSource:

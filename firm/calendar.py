@@ -33,6 +33,20 @@ def fetch_nse_holidays() -> dict[int, list[str]]:
     return by_year
 
 
+def refresh_holiday_cache() -> list[int]:
+    """Fetch NSE's holiday list and cache every year it contains. Returns the years that were new or changed.
+    NSE usually publishes next year's list in December, so a daily call picks it up by itself."""
+    changed = []
+    UNIVERSE_DIR.mkdir(parents=True, exist_ok=True)
+    for year, days in fetch_nse_holidays().items():
+        path = _cache_path(year)
+        new = json.dumps(sorted(days))
+        if not path.exists() or path.read_text() != new:
+            path.write_text(new)
+            changed.append(year)
+    return changed
+
+
 class TradingCalendar:
     def __init__(self, holidays: dict[int, set[date]] | None = None, refresh: bool = True) -> None:
         self.holidays: dict[int, set[date]] = dict(holidays or {})

@@ -108,8 +108,25 @@ class Recorder:
         self.activity = ActivityLog(LIVE_DIR / "firm.db")
         self.nse = NSEAnnouncements()
         self._fyers = None
+        self.watch = self._make_watch()
         self.last_run: dict[str, float] = {}
         self.last_options_slot: datetime | None = None
+
+    def _make_watch(self):
+        from firm import fyers_auth, ops
+        from firm.alerts import Watch, notify
+        from firm.calendar import TradingCalendar
+
+        cal = TradingCalendar(refresh=False)
+        return Watch(
+            probe=fyers_auth.token_status,
+            notifier=lambda title, msg: (notify(title, msg),
+                                         self.activity.log("alert", "Recorder", f"{title}: {msg}")),
+            # a sandbox the owner switched off on purpose is not "down"
+            sandbox_running=lambda: ops.is_running("sandbox") or self.ctl.get("service.sandbox.run") != "run",
+            is_trading_day=cal.is_trading_day,
+            enabled=lambda: self.ctl.get_bool("alert.enabled"),
+            log=log.info)
 
     def fyers(self):
         if self._fyers is None:
@@ -121,7 +138,17 @@ class Recorder:
     def run_job(self, job: str, fn) -> str:
         started = now()
         try:
-            rows, status, msg = fn()
+            try:
+                rows, status, msg = fn()
+            except FyersAuthError:
+                from firm import fyers_auth
+
+                renewed, _ = fyers_auth.auto_renew()     # quiet daily renewal from the refresh token + PIN
+                if not renewed:
+                    raise
+                self._fyers = None
+                self.activity.log("act", "Recorder", "Fyers login renewed automatically.")
+                rows, status, msg = fn()
         except FyersAuthError as e:
             self._fyers = None  # reload token from .env next time
             rows, status, msg = 0, "auth_failed", f"{e}. Run scripts/fyers_login.py"
@@ -260,7 +287,8 @@ class Recorder:
         return {"news": self.job_news, "announcements": self.job_announcements,
                 "board_meetings": self.job_board_meetings, "options": self.job_options, "bars": self.job_bars,
                 "results": self.job_results, "researcher": self.job_researcher, "runner": self.job_runner,
-                "desk": self.job_desk}
+                "desk": self.job_desk, "backup": self.job_backup,
+                "head": self.job_head}
 
     def handle_commands(self) -> None:
         """Run what the dashboard queued for the recorder ("run now", reload the Fyers token)."""
@@ -287,6 +315,10 @@ class Recorder:
         # The owner's queued commands are checked between jobs, so a long job (the Researcher can run
         # for minutes) never leaves a "run now" waiting for the whole tick.
         self.handle_commands()
+        try:
+            self.watch.check(t)
+        except Exception:
+            log.exception("reminder check failed")
         if self._go("news", NEWS_EVERY_S):
             self.run_job("news", self.job_news)
         if self._go("announcements", NEWS_EVERY_S):
@@ -309,6 +341,15 @@ class Recorder:
                 and not self.done_today("runner") and self._due("runner", BARS_RETRY_S)):
             self.run_job("runner", self.job_runner)
 
+        if (self.ctl.job_enabled("head") and self.done_today("desk") and not self.done_today("head")
+                and self._due("head", BARS_RETRY_S)):
+            self.run_job("head", self.job_head)
+        if (t.time() >= dtime(18, 0) and self.ctl.job_enabled("backup") and not self.done_today("backup")
+                and self._due("backup", BARS_RETRY_S)):
+            self.run_job("backup", self.job_backup)
+        if self._due("holidays", 86400):
+            self.run_job("holidays", self.job_holidays)
+
         self.handle_commands()
         if self._go("results", 1800):
             self.run_job("results", self.job_results)
@@ -319,6 +360,20 @@ class Recorder:
         if (self.ctl.job_enabled("desk") and self.done_today("runner") and not self.done_today("desk")
                 and self._due("desk", BARS_RETRY_S)):
             self.run_job("desk", self.job_desk)
+
+    def job_backup(self):
+        from firm.backup import default_destination, run_backup
+        from firm.config import DATA_DIR
+
+        dest = Path(self.ctl.get("backup.dir").strip() or default_destination())
+        r = run_backup(DATA_DIR, dest, now().date())
+        return len(r.databases) + r.files_copied, ("ok" if r.status == "ok" else "error"), r.message
+
+    def job_holidays(self):
+        from firm.calendar import refresh_holiday_cache
+
+        added = refresh_holiday_cache()
+        return len(added), "ok", ("new years cached: " + ", ".join(map(str, added))) if added else "nothing new"
 
     def job_researcher(self):
         from firm.agents.desk import run_research
@@ -333,6 +388,27 @@ class Recorder:
 
         r = run_evening(LIVE_DIR / "firm.db", control=self.ctl)
         return r["notes"] + r["proposals"], "ok", r["msg"]
+
+    def job_head(self):
+        """The Head (shadow): one firm report and an allocation proposal. Moves no money."""
+        from firm.agents.head import write_report
+        from firm.backtest.benchmarks import equal_weight
+        from firm.backtest.data import MarketData
+        from firm.live.books import PROBATION_START
+        from firm.live.runner import LIVE_DIR
+        from firm.universe import nifty100
+
+        today = now().date()
+        ew_ret = None
+        try:
+            closes = MarketData.from_store("1d_yahoo", nifty100(), start=PROBATION_START - timedelta(days=30)).panels["close"]
+            ew = equal_weight(closes, PROBATION_START + timedelta(days=1), today + timedelta(days=1))
+            ew_ret = float((1 + ew).prod() - 1) if len(ew) else None
+        except Exception:
+            log.warning("head: equal-weight benchmark unavailable", exc_info=True)
+        r = write_report(LIVE_DIR / "firm.db", today, ew_ret=ew_ret, halted=self.ctl.get_bool("halt.firm"))
+        self.activity.log("think", "Head", f"Proposal: {r['plan']['action']}. {r['plan']['why']}")
+        return 1, "ok", r["plan"]["action"]
 
     def job_runner(self):
         from firm.live.books import books
@@ -442,7 +518,7 @@ def main() -> int:
     sub.add_parser("run")
     once = sub.add_parser("once")
     once.add_argument("job", choices=["news", "announcements", "board_meetings", "options", "bars", "runner",
-                                      "researcher", "desk", "results"])
+                                      "researcher", "desk", "results", "backup", "holidays", "head"])
     bf = sub.add_parser("backfill")
     bf.add_argument("--bar-days", type=int, default=365)
     bf.add_argument("--ann-days", type=int, default=365)

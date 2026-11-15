@@ -55,6 +55,8 @@ JOBS = {
     "researcher": ("Researcher", "An AI helper that reads new filings and headlines and writes short notes."),
     "runner": ("Evening paper-trading update", "After 16:00 each trading day: updates the swing experiment and decides at month-end."),
     "desk": ("Daily notes", "After the evening update: a plain-English note on how each book did."),
+    "head": ("The Head (advice only)", "After the daily notes: a firm-wide report and a money-allocation proposal. It moves no money."),
+    "backup": ("Nightly backup", "After 18:00 each day: copies the databases and saved prices to the backup folder."),
 }
 BOOKS = {
     "swing_probation": "Swing experiment (the main test)",
@@ -83,6 +85,11 @@ def _registry() -> dict[str, Switch]:
     r["agent.guard"] = Switch("agent.guard", "shadow", "Risk watcher",
                               "Watch only: notes what it would do, never acts. Off: does not run.", "agents")
     r["llm.enabled"] = Switch("llm.enabled", "true", "AI model", "Use the AI model on this laptop for notes and summaries.", "agents")
+    r["backup.dir"] = Switch("backup.dir", "", "Backup folder",
+                             "Where backups go. Empty means the D: drive if there is one, else your user folder. Best: an external drive or a OneDrive folder.", "firm")
+    r["alert.enabled"] = Switch("alert.enabled", "true", "Reminders",
+                                "A notification on trading mornings if the Fyers login is missing or practice trading is not running.",
+                                "firm")
     r["sandbox.skip_date"] = Switch("sandbox.skip_date", "", "Skip a sandbox day",
                                     "The date (YYYY-MM-DD) the sandbox accounts sit out. They stay flat and the day still counts.", "books")
     for s in SERVICES:

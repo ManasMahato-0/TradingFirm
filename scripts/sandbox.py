@@ -94,7 +94,7 @@ def should_run(day: date, now: datetime, cal, done: set, shakedown: bool, launch
             and (shakedown or day >= launch))
 
 
-def run_live_day(day: date, shakedown: bool, tlog, now_fn=None, sleep_fn=None, make_fyers=None) -> str:
+def run_live_day(day: date, shakedown: bool, tlog, now_fn=None, sleep_fn=None, make_fyers=None, renew=None) -> str:
     """One trading day. Returns 'done', 'skipped' (no Fyers login by 09:30) or raises.
     now_fn, sleep_fn and make_fyers exist so the whole day can be tested against a fake Fyers."""
     from firm.activity import ActivityLog
@@ -106,6 +106,8 @@ def run_live_day(day: date, shakedown: bool, tlog, now_fn=None, sleep_fn=None, m
     now_fn = now_fn or (lambda: datetime.now(IST))
     sleep_fn = sleep_fn or time.sleep
     make_fyers = make_fyers or FyersData
+    if renew is None and make_fyers is FyersData:      # fakes in tests must never touch the real .env
+        from firm.fyers_auth import auto_renew as renew
     db, state = paths(shakedown)
     activity = ActivityLog(db)
     agents = ["Sandbox A (history)", "Sandbox B (blank)", "Sandbox C (random)", "Sandbox D (cash)"]
@@ -119,7 +121,7 @@ def run_live_day(day: date, shakedown: bool, tlog, now_fn=None, sleep_fn=None, m
 
     warned = False
     while True:
-        ok, msg = probe_token(make_fyers)
+        ok, msg = probe_token(make_fyers, renew=renew)
         if ok:
             break
         for a in agents:

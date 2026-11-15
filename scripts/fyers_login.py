@@ -67,6 +67,10 @@ def main() -> int:
 
     set_key(str(ENV_PATH), "FYERS_ACCESS_TOKEN", token)
     print("Access token saved to .env.")
+    from firm.fyers_auth import save_refresh_token
+
+    if save_refresh_token(resp):
+        print("Refresh token saved too (add FYERS_PIN from the dashboard to turn on daily auto-renew).")
 
     # Quick check that data actually flows.
     from firm.data.fyers import FyersData

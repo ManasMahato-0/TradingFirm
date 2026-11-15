@@ -23,7 +23,7 @@ Everything here is **paper money**. There is no real-order code anywhere in the 
 | Intraday stocks | Parked: the best research idea failed its final exam |
 | Option teams | Parked: intraday has no price history; overnight baselines all failed |
 | Fundamentals (results numbers) | Tested, no predictive edge found |
-| Head (capital allocator) | Not built; nothing to allocate between yet |
+| Head (capital allocator) | Built in advice-only mode: writes a daily firm report and a proposal, moves no money. Currently says HOLD |
 
 Nothing has passed a locked-period exam so far. The full research log, including every failure, is in [`docs/PLAN.md`](docs/PLAN.md).
 
@@ -78,7 +78,7 @@ then go to <http://localhost:8501>.
 
 ## Daily use
 
-Fyers logins expire every day. On a trading morning, open the dashboard's **Home** page and follow the three steps to log in (or run `scripts\fyers_login.py`). The system does the rest by itself. All switches, start/stop buttons and the emergency halt are on the **Settings** page.
+Fyers logins expire every day. On a trading morning, open the dashboard's **Home** page and follow the three steps to log in (or run `scripts\fyers_login.py`). You get a Windows notification at 08:45 if you have not logged in. The system does the rest by itself, including a daily backup of the data. All switches, start/stop buttons and the emergency halt are on the **Settings** page.
 
 ## Useful commands
 

@@ -213,8 +213,20 @@ def data_section(ctl: Control) -> None:
     for job in ("news", "announcements", "board_meetings", "results", "options", "bars"):
         job_row(ctl, job, runs)
     st.markdown("##### The evening update")
-    for job in ("runner", "desk"):
+    for job in ("runner", "desk", "head"):
         job_row(ctl, job, runs)
+    st.markdown("##### Backups")
+    job_row(ctl, "backup", runs)
+    cur = ctl.get("backup.dir")
+    from firm.backup import default_destination
+
+    folder = st.text_input("Backup folder", value=cur, placeholder=str(default_destination()),
+                           help="Empty = " + str(default_destination()) + ". Best: an external drive or a OneDrive folder, "
+                                "so one laptop failure cannot take both copies. Login keys (.env) are never backed up.")
+    if folder.strip() != cur:
+        ctl.set("backup.dir", folder.strip())
+        st.toast("Backup folder saved.")
+    st.caption("Runs once a day after 18:00 while the laptop is on. First run copies everything; later runs only what changed.")
     st.caption("The evening update needs the day's share prices. The daily notes need the evening update.")
     st.markdown("##### AI helpers")
     st.caption("They read and write. They never place orders.")
@@ -265,6 +277,8 @@ def fyers_section(ctl: Control, compact: bool = False) -> None:
         c2.button("Check again", on_click=fyers_state.clear, use_container_width=True)
         st.caption("Fyers logins expire every day. Do this before 9:15 on trading days. It takes about a minute, and "
                    "the login is saved without ever being shown on screen.")
+    if not compact:
+        toggle(ctl, "alert.enabled", SWITCHES["alert.enabled"].label, SWITCHES["alert.enabled"].help)
     if "fyers_login" not in st.session_state:
         try:
             st.session_state["fyers_login"] = fyers_auth.begin()

@@ -461,6 +461,29 @@ and every page section in every data mode.
 - AI Trader guard runs in shadow mode during probation (logged, scored, not applied).
 - Weekly strategist = Claude in Claude Code (`/weekly-review`), discusses before running anything.
 
+## Head v0 (shadow), Alerts, Backups: built 2026-11-15
+
+**Head v0 (advice only).** Reads every book each evening and writes one firm report plus an allocation
+proposal (`head_reports` table, shown on Home). Pure code, no LLM, so the text cannot contain invented numbers.
+It moves no money and imports no broker, risk or runner code (a test enforces it). Rules: a team gets capital
+only after it passes its own pre-registered test (swing: the probation promote rule above, incl. the manual
+trades-match check; intraday stocks: a sandbox account passes a day-60 or day-120 checkpoint). With none
+passed the proposal is HOLD. If some pass: equal split, at most 50% each, rest cash. Parked teams get 0.
+Making the Head act on its proposal would need a new pre-registered decision after real results exist.
+
+**Alerts.** Windows notification (plus optional ntfy phone push) on trading days at 08:45, 09:00, 09:10 if the
+Fyers login is missing, and once if the practice-trading program is not running at 09:05 to 09:30.
+
+**Fyers daily login.** Fyers' refresh-token endpoint is disabled ("to comply with SEBI regulations",
+checked with a real call on 2026-11-15), so a manual login is needed every trading day. Auto-renew code is
+kept dormant; it does nothing without a stored PIN.
+
+**Backups.** Daily after 18:00: databases via SQLite's backup call, plain files mirrored, nothing deleted,
+`.env` never copied. Default folder D:\TradingFirmBackups (change it in Settings). A separate drive letter on
+the same physical disk does not protect against disk failure: point it at an external drive or OneDrive.
+
+**NSE holiday list.** Fetched daily; 2027's list is picked up automatically once NSE publishes it.
+
 ## Open issues
 
 - Survivorship bias in the stock universe (historical index membership not free).
